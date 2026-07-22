@@ -1,0 +1,33 @@
+{
+  "name": "arka-outbound-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI-native outbound marketing agent for Arka Alliance — MVP vertical slice",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "pipeline": "node --env-file-if-exists=.env.local --import tsx scripts/run-pipeline.ts",
+    "verify": "node --env-file-if-exists=.env.local --import tsx scripts/verify.ts",
+    "db:check": "node --env-file-if-exists=.env.local --import tsx scripts/db-check.ts",
+    "apollo:check": "node --env-file-if-exists=.env.local --import tsx scripts/apollo-check.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.111.0",
+    "@langchain/langgraph": "^0.2.44",
+    "@supabase/supabase-js": "^2.110.2",
+    "next": "^15.1.6",
+    "nodemailer": "^6.10.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/nodemailer": "^6.4.24",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.0"
+  }
+}

@@ -153,7 +153,7 @@ function CampaignCard({
   const liSent = !!campaign.linkedinSentAt;
 
   async function act(
-    action: "approve" | "reject" | "edit" | "send" | "regenerate" | "send_linkedin",
+    action: "approve" | "reject" | "edit" | "send" | "send_manual" | "regenerate" | "send_linkedin",
     opts?: { channel?: Channel; tone?: Tone; from?: string }
   ) {
     setBusy(true);
@@ -183,14 +183,23 @@ function CampaignCard({
       await onChange();
       // Tell the sidebar to refresh its pending-approvals count.
       window.dispatchEvent(new Event("campaigns-updated"));
-      // LinkedIn: hand the message to the operator (clipboard + profile tab).
+      // LinkedIn: copy the DM, then open the compose window for that person
+      // (falling back to their profile, where Message is one click away).
       if (action === "send_linkedin" && data.linkedin) {
-        try {
-          await navigator.clipboard.writeText(data.linkedin.message);
-        } catch {
-          /* clipboard may be blocked — the text is still on screen */
-        }
-        if (data.linkedin.profileUrl) window.open(data.linkedin.profileUrl, "_blank", "noopener");
+        await copyToClipboard(data.linkedin.message);
+        const target = data.linkedin.composeUrl || data.linkedin.profileUrl;
+        if (target) window.open(target, "_blank", "noopener");
+      }
+
+      // Email handed to the operator's own mail app: copy the body, then open
+      // a compose window with recipient/subject/body already filled in.
+      if (action === "send_manual" && data.manual) {
+        await copyToClipboard(data.manual.body);
+        const { to, subject, body: mailBody } = data.manual;
+        // The address stays raw — some mail clients mishandle a %40 in the path.
+        window.location.href = `mailto:${to}?subject=${encodeURIComponent(
+          subject
+        )}&body=${encodeURIComponent(mailBody)}`;
       }
 
       const sent = data.send?.status as string | undefined;
@@ -203,7 +212,9 @@ function CampaignCard({
           : action === "regenerate"
           ? `✓ Regenerated (${opts?.tone ?? "direct"})`
           : action === "send_linkedin"
-          ? "✓ DM copied — profile opened"
+          ? "✓ DM copied — LinkedIn opened, paste and send"
+          : action === "send_manual"
+          ? "✓ Copied — your mail app is opening with it filled in"
           : action === "send"
           ? sent === "simulated"
             ? "Simulated — no mail provider configured"
@@ -212,7 +223,7 @@ function CampaignCard({
             : `✓ Sent via ${provider}`
           : "✓ Saved"
       );
-      if (action === "send") setShowSend(false);
+      if (action === "send" || action === "send_manual") setShowSend(false);
       setTimeout(() => setFlash(null), 3500);
     } catch (e) {
       setActionError((e as Error).message);
@@ -459,19 +470,26 @@ function CampaignCard({
             <span className="send-to">{(campaign.editedEmail ?? campaign.email)?.subject}</span>
           </div>
           <div className="actions" style={{ marginTop: 10 }}>
+            <button className="btn btn-primary" disabled={busy} onClick={() => act("send_manual")}>
+              {busy ? "Opening…" : "Open in my mail app"}
+            </button>
             <button
-              className="btn btn-primary"
+              className="btn"
               disabled={busy || !fromEmail.trim()}
               onClick={() => act("send", { from: fromEmail.trim() })}
             >
-              {busy ? "Sending…" : "Send now"}
+              {busy ? "Sending…" : "Send automatically"}
             </button>
             <button className="btn btn-ghost" disabled={busy} onClick={() => setShowSend(false)}>
               Cancel
             </button>
-            <span style={{ color: "var(--muted)", fontSize: 12.5 }}>
-              Sends for real via your mail provider (Resend/SMTP). Without one configured it&apos;s simulated.
-            </span>
+          </div>
+          <div style={{ color: "var(--muted)", fontSize: 12.5, marginTop: 8, lineHeight: 1.6 }}>
+            <b>Open in my mail app</b> — copies the email and opens your own client (Gmail/Outlook)
+            with everything filled in. Replies come straight to your inbox. No sending domain needed.
+            <br />
+            <b>Send automatically</b> — delivers via your provider (Resend/SMTP). Needs a verified
+            sending domain; without one it&apos;s simulated.
           </div>
         </div>
       )}
@@ -479,6 +497,34 @@ function CampaignCard({
       <div className="log">{campaign.log.join("  ·  ")}</div>
     </div>
   );
+}
+
+/**
+ * Copy text, falling back to a hidden textarea where the async clipboard API
+ * isn't available (non-HTTPS origins, older browsers). Never throws — the
+ * message is on screen either way, so a copy failure must not break the send.
+ */
+async function copyToClipboard(text: string): Promise<void> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+  } catch {
+    /* fall through to the textarea path */
+  }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+  } catch {
+    /* clipboard unavailable — the text is still visible in the editor */
+  }
 }
 
 function TrustBar({ label, value }: { label: string; value: number }) {

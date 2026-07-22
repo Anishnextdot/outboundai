@@ -30,7 +30,7 @@ export async function GET() {
 
 interface ActionBody {
   id: string;
-  action: "approve" | "reject" | "edit" | "send" | "regenerate" | "send_linkedin";
+  action: "approve" | "reject" | "edit" | "send" | "send_manual" | "regenerate" | "send_linkedin";
   email?: EmailDraft; // required for "edit"
   channel?: Channel; // "email" (default) | "linkedin"
   tone?: Tone; // for "regenerate"
@@ -117,6 +117,31 @@ export async function POST(req: Request) {
         const updated = await markSent(existing.id, user.id, result);
         return NextResponse.json({ campaign: updated, send: result });
       }
+      case "send_manual": {
+        // Hand the email off to the operator's own mail app (Gmail/Outlook/…)
+        // instead of delivering it ourselves. Useful before a sending domain is
+        // verified, and it sends from their real inbox so replies land there.
+        if (existing.status !== "approved")
+          return NextResponse.json({ error: "only approved campaigns can be sent" }, { status: 409 });
+        if (existing.sendStatus === "sent" || existing.sendStatus === "simulated")
+          return NextResponse.json({ error: "already sent" }, { status: 409 });
+        const to = existing.decisionMaker?.email;
+        if (!to || !isValidEmail(to))
+          return NextResponse.json({ error: "no valid recipient email" }, { status: 400 });
+        const draft = existing.editedEmail ?? existing.email;
+        if (!draft) return NextResponse.json({ error: "no email draft to send" }, { status: 400 });
+
+        // Recorded as sent — the operator is about to send it from their client.
+        const updated = await markSent(existing.id, user.id, {
+          status: "sent",
+          messageId: null,
+          error: null,
+        });
+        return NextResponse.json({
+          campaign: updated,
+          manual: { to, subject: draft.subject, body: draft.body },
+        });
+      }
       case "send_linkedin": {
         // LinkedIn has no send API (and automating it breaks their ToS), so the
         // operator sends it in LinkedIn — we hand over the text + profile URL
@@ -127,7 +152,10 @@ export async function POST(req: Request) {
         if (!dm) return NextResponse.json({ error: "no LinkedIn draft — generate one first" }, { status: 400 });
         const profileUrl = existing.decisionMaker?.linkedinUrl ?? null;
         const updated = await markLinkedInSent(existing.id, user.id);
-        return NextResponse.json({ campaign: updated, linkedin: { message: dm.body, profileUrl } });
+        return NextResponse.json({
+          campaign: updated,
+          linkedin: { message: dm.body, profileUrl, composeUrl: linkedinComposeUrl(profileUrl) },
+        });
       }
       default:
         return NextResponse.json({ error: "unknown action" }, { status: 400 });
@@ -136,4 +164,20 @@ export async function POST(req: Request) {
     console.error("[/api/campaigns POST]", err);
     return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }
+}
+
+/**
+ * Best-effort deep link to a LinkedIn compose window for this person.
+ *
+ * LinkedIn has no supported public "message person X" URL — this uses the
+ * public identifier from their profile URL, which usually opens messaging with
+ * the thread selected. It can also land on the messaging home if LinkedIn
+ * doesn't resolve the handle, which is why the profile link stays available as
+ * a fallback and the message is always copied to the clipboard first.
+ */
+function linkedinComposeUrl(profileUrl: string | null): string | null {
+  if (!profileUrl) return null;
+  const m = profileUrl.match(/linkedin\.com\/in\/([^/?#]+)/i);
+  if (!m) return null;
+  return `https://www.linkedin.com/messaging/compose/?recipient=${encodeURIComponent(m[1])}`;
 }

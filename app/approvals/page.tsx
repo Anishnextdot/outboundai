@@ -428,7 +428,7 @@ function CampaignCard({
         {/* LinkedIn send — copies the DM and opens the real profile. */}
         {campaign.status === "approved" && campaign.linkedin && (
           liSent ? (
-            <span className="status-tag" style={{ background: "var(--blue-soft)", color: "#1c5fbf" }}>
+            <span className="status-tag" style={{ background: "var(--blue-soft)", color: "var(--blue)" }}>
               LinkedIn sent ✓
             </span>
           ) : (
@@ -548,7 +548,7 @@ function trustClass(t: number): string {
 }
 
 function barColor(v: number): string {
-  if (v >= 75) return "#22c55e";
-  if (v >= 50) return "#f59e0b";
-  return "#ef4444";
+  if (v >= 75) return "var(--green)";
+  if (v >= 50) return "var(--amber)";
+  return "var(--red)";
 }

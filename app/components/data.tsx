@@ -39,7 +39,14 @@ export function initials(name: string): string {
   return name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase();
 }
 
-const AVATAR_COLORS = ["#6c5ce7", "#e8590c", "#0ca678", "#1c7ed6", "#ae3ec9", "#d6336c"];
+const AVATAR_COLORS = [
+  "oklch(0.58 0.2 283)",
+  "oklch(0.6 0.15 252)",
+  "oklch(0.6 0.13 152)",
+  "oklch(0.65 0.15 62)",
+  "oklch(0.62 0.19 5)",
+  "oklch(0.6 0.12 195)",
+];
 export function avatarColor(seed: string): string {
   let h = 0;
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) & 0xffff;
@@ -47,7 +54,7 @@ export function avatarColor(seed: string): string {
 }
 
 export function logoColor(company: string): string {
-  return company.toLowerCase().includes("decathlon") ? "#0082c3" : "#16181d";
+  return company.toLowerCase().includes("decathlon") ? "#0082c3" : "oklch(0.25 0.015 60)";
 }
 
 export function fmtDate(iso: string): string {

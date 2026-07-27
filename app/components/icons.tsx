@@ -25,7 +25,15 @@ export type IconName =
   | "chevronRight"
   | "plus"
   | "bot"
-  | "kebab";
+  | "kebab"
+  | "sparkle"
+  | "mail"
+  | "reply"
+  | "users"
+  | "target"
+  | "linkedin"
+  | "arrowUp"
+  | "arrowDown";
 
 const P: Record<IconName, ReactElement> = {
   dashboard: (
@@ -157,6 +165,46 @@ const P: Record<IconName, ReactElement> = {
       <circle cx="12" cy="19" r="1.4" />
     </>
   ),
+  sparkle: (
+    <>
+      <path d="M12 3.2 13.7 9c.2.6.7 1.1 1.3 1.3l5.8 1.7-5.8 1.7c-.6.2-1.1.7-1.3 1.3L12 20.8 10.3 15c-.2-.6-.7-1.1-1.3-1.3L3.2 12 9 10.3c.6-.2 1.1-.7 1.3-1.3L12 3.2z" />
+      <path d="M18.5 3.5v3M17 5h3" />
+    </>
+  ),
+  mail: (
+    <>
+      <rect x="3" y="5" width="18" height="14" rx="2.5" />
+      <path d="m3.8 6.8 7.1 5.3c.7.5 1.6.5 2.2 0l7.1-5.3" />
+    </>
+  ),
+  reply: (
+    <>
+      <path d="M9 7 3.5 12 9 17" />
+      <path d="M3.5 12H14a6.5 6.5 0 0 1 6.5 6.5V19" />
+    </>
+  ),
+  users: (
+    <>
+      <circle cx="9" cy="8" r="3.2" />
+      <path d="M3 19.5c0-3.3 2.7-6 6-6s6 2.7 6 6" />
+      <path d="M16 5.5a3.2 3.2 0 0 1 0 6.2M17.5 13.8c2 .8 3.5 2.8 3.5 5.2" />
+    </>
+  ),
+  target: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <circle cx="12" cy="12" r="4.6" />
+      <circle cx="12" cy="12" r="1" />
+    </>
+  ),
+  linkedin: (
+    <>
+      <rect x="3" y="3" width="18" height="18" rx="3" />
+      <path d="M7.5 10.5V17M7.5 7.4v.1M11.5 17v-6.5M11.5 13.4c0-1.6 1-2.9 2.5-2.9s2.5 1 2.5 2.9V17" />
+    </>
+  ),
+  arrowUp: <path d="M7 17 17 7M9 7h8v8" />,
+  arrowDown: <path d="M7 7l10 10M17 9v8H9" />,
 };
 
 export function Icon({

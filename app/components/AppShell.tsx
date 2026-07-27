@@ -104,10 +104,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="app">
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-mark">A</div>
+          <div className="brand-mark">
+            <Icon name="sparkle" size={21} filled />
+          </div>
           <div>
-            <div className="brand-name">ARKA ALLIANCE</div>
-            <div className="brand-sub">Outbound AI Agent</div>
+            <div className="brand-name">Arka Alliance</div>
+            <div className="brand-sub">AI Outbound</div>
           </div>
         </div>
 
@@ -130,16 +132,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="sidebar-foot">
-          <div className="avatar" style={{ background: "linear-gradient(135deg,#7c6cf0,#5b4bd6)" }}>
+          <div className="avatar" style={{ background: "var(--brand-soft-2)", color: "var(--brand-ink)" }}>
             {initials}
           </div>
-          <div style={{ lineHeight: 1.2, minWidth: 0 }}>
-            <div style={{ fontWeight: 600, fontSize: 13.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              {user?.name ?? "Signed in"}
-            </div>
-            <div style={{ color: "var(--muted)", fontSize: 11.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              {user?.email}
-            </div>
+          <div style={{ lineHeight: 1.25, minWidth: 0 }}>
+            <div className="user-name">{user?.name ?? "Signed in"}</div>
+            <div className="user-sub">{user?.email}</div>
           </div>
           <button className="logout-btn" onClick={logout} title="Sign out">
             ⏻

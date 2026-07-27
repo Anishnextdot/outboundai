@@ -13,7 +13,14 @@ interface Analytics {
   insights: { tone: "good" | "warn" | "info"; title: string; detail: string }[];
 }
 
-const FUNNEL_COLORS = ["#6366f1", "#3b82f6", "#14b8a6", "#f59e0b", "#f97316", "#ef4444"];
+const FUNNEL_COLORS = [
+  "oklch(0.55 0.215 283)",
+  "oklch(0.58 0.19 274)",
+  "oklch(0.6 0.16 262)",
+  "oklch(0.62 0.15 232)",
+  "oklch(0.64 0.14 190)",
+  "oklch(0.66 0.15 152)",
+];
 const FUNNEL_WIDTHS = [100, 84, 74, 60, 46, 34];
 
 export default function AnalyticsPage() {
@@ -35,10 +42,10 @@ export default function AnalyticsPage() {
 
   const trust: DonutSeg[] = a
     ? [
-        { label: "80 - 100", value: a.trust[0], color: "#22c55e" },
-        { label: "60 - 80", value: a.trust[1], color: "#3b82f6" },
-        { label: "40 - 60", value: a.trust[2], color: "#f59e0b" },
-        { label: "0 - 40", value: a.trust[3], color: "#ef4444" },
+        { label: "80 - 100", value: a.trust[0], color: "var(--green)" },
+        { label: "60 - 80", value: a.trust[1], color: "var(--amber)" },
+        { label: "40 - 60", value: a.trust[2], color: "var(--orange)" },
+        { label: "0 - 40", value: a.trust[3], color: "var(--red)" },
       ]
     : [];
   const trustTotal = trust.reduce((s, x) => s + x.value, 0);
@@ -162,7 +169,7 @@ function RateCard({ label, value, sub }: { label: string; value: number; sub: st
 }
 
 function toneColor(t: "good" | "warn" | "info"): string {
-  if (t === "good") return "#22c55e";
-  if (t === "warn") return "#f59e0b";
-  return "#3b82f6";
+  if (t === "good") return "var(--green)";
+  if (t === "warn") return "var(--amber)";
+  return "var(--blue)";
 }

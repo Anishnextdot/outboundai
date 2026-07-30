@@ -107,6 +107,28 @@ export interface PipelineResult {
   log: string[];
 }
 
+/** A node that has just finished, reported as the run happens. */
+export interface PipelineStep {
+  /** Graph node name — one of PIPELINE_NODES. */
+  node: string;
+  /** Company known at this point, once discovery has resolved one. */
+  company: string | null;
+  /** Log lines the node emitted. */
+  log: string[];
+  /** True once the gate has blocked this lead (the run ends here). */
+  blocked: boolean;
+}
+
+/** Every node, in execution order. The UI turns this into a progress list. */
+export const PIPELINE_NODES = [
+  "discover",
+  "findPerson",
+  "assess",
+  "doResearch",
+  "personalize",
+  "writeContent",
+] as const;
+
 export interface PipelineOptions {
   /** Pre-discovered company (batch mode skips the search). */
   company?: Company | null;
@@ -114,25 +136,51 @@ export interface PipelineOptions {
   webSearch?: boolean;
   /** Name to sign the email/DM with (the logged-in user).*/
   senderName?: string | null;
+  /** Called after each node completes — real progress, not a timer. */
+  onStep?: (step: PipelineStep) => void;
 }
 
 /** Run the full outbound pipeline for one ICP. */
 export async function runPipeline(icp: Icp, opts?: PipelineOptions): Promise<PipelineResult> {
-  const final = await graph.invoke({
+  const input = {
     icp,
     company: opts?.company ?? null,
     webSearch: opts?.webSearch ?? null,
     senderName: opts?.senderName ?? null,
-  });
+  };
+
+  if (!opts?.onStep) return shape(await graph.invoke(input));
+
+  // Streaming mode: each node's update is reported the moment it lands, so the
+  // operator watches the real pipeline rather than a fake progress bar.
+  const acc: Partial<State> = { ...input, angles: [], log: [] };
+  const stream = await graph.stream(input, { streamMode: "updates" });
+  for await (const chunk of stream) {
+    for (const [node, raw] of Object.entries(chunk as Record<string, Partial<State>>)) {
+      const { log, ...rest } = raw ?? {};
+      Object.assign(acc, rest);
+      if (log?.length) acc.log = (acc.log ?? []).concat(log);
+      opts.onStep({
+        node,
+        company: acc.company?.name ?? null,
+        log: log ?? [],
+        blocked: acc.blocked ?? false,
+      });
+    }
+  }
+  return shape(acc);
+}
+
+function shape(s: Partial<State>): PipelineResult {
   return {
-    company: final.company,
-    decisionMaker: final.decisionMaker,
-    research: final.research,
-    angles: final.angles,
-    email: final.email,
-    linkedin: final.linkedin,
-    blocked: final.blocked,
-    blockedReason: final.blockedReason,
-    log: final.log,
+    company: s.company ?? null,
+    decisionMaker: s.decisionMaker ?? null,
+    research: s.research ?? null,
+    angles: s.angles ?? [],
+    email: s.email ?? null,
+    linkedin: s.linkedin ?? null,
+    blocked: s.blocked ?? false,
+    blockedReason: s.blockedReason ?? null,
+    log: s.log ?? [],
   };
 }

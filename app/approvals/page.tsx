@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell } from "../components/AppShell";
 import { Icon } from "../components/icons";
+import { RunPanel, newRun, reduceRun, runPipelineStream, type RunState } from "../components/RunPanel";
 import { TONE_OPTIONS } from "@/src/types";
 import type { Campaign, Channel, EmailDraft, Tone } from "@/src/types";
 
@@ -13,10 +14,14 @@ export default function ApprovalsPage() {
   const [employeeRange, setEmployeeRange] = useState("11-200");
   const [location, setLocation] = useState("");
   const [count, setCount] = useState(3);
-  const [running, setRunning] = useState(false);
+  const [run, setRun] = useState<RunState | null>(null);
+  const [newIds, setNewIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const running = run?.active ?? false;
+  // The panel is what the operator watches, so scroll it into view once.
+  const panelRef = useRef<HTMLDivElement>(null);
 
-  async function refresh() {
+  const refresh = useCallback(async () => {
     try {
       const res = await fetch("/api/campaigns");
       const data = await res.json();
@@ -30,31 +35,40 @@ export default function ApprovalsPage() {
     } catch (e) {
       setError((e as Error).message);
     }
-  }
+  }, []);
 
   useEffect(() => {
     refresh();
-  }, []);
+  }, [refresh]);
 
   async function runPipeline() {
-    setRunning(true);
     setError(null);
+    setNewIds([]);
+    setRun(newRun(count));
     try {
-      const res = await fetch("/api/pipeline", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ industry, employeeRange, location, count }),
+      await runPipelineStream({ industry, employeeRange, location, count }, (e) => {
+        setRun((s) => (s ? reduceRun(s, e) : s));
+
+        // A lead is persisted the moment this fires — show it immediately
+        // instead of waiting for the rest of the batch.
+        if (e.t === "lead") {
+          setCampaigns((prev) => [e.campaign, ...prev.filter((c) => c.id !== e.campaign.id)]);
+          setNewIds((prev) => (prev.includes(e.campaign.id) ? prev : [...prev, e.campaign.id]));
+          window.dispatchEvent(new Event("campaigns-updated"));
+        }
+        if (e.t === "error") setError(e.message);
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Pipeline failed");
+      // Reconcile with the server once the run settles.
       await refresh();
-      window.dispatchEvent(new Event("campaigns-updated"));
     } catch (e) {
       setError((e as Error).message);
-    } finally {
-      setRunning(false);
+      setRun((s) => (s ? { ...s, active: false, discovering: false, finishedAt: Date.now() } : s));
     }
   }
+
+  useEffect(() => {
+    if (run?.active) panelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [run?.active]);
 
   return (
     <AppShell>
@@ -91,7 +105,7 @@ export default function ApprovalsPage() {
             />
           </div>
           <button className="btn btn-primary" onClick={runPipeline} disabled={running || !industry.trim()}>
-            <Icon name="plus" size={16} />
+            {running ? <span className="btn-spinner" /> : <Icon name="plus" size={16} />}
             {running ? `Finding ${count} real lead${count > 1 ? "s" : ""}…` : `Find ${count} lead${count > 1 ? "s" : ""}`}
           </button>
         </div>
@@ -99,6 +113,8 @@ export default function ApprovalsPage() {
           Batch (2-10) finds multiple real companies fast (parametric research). Set to 1 for a single deep, web-search-grounded lead.
         </div>
       </div>
+
+      <div ref={panelRef}>{run && <RunPanel run={run} onDismiss={() => setRun(null)} />}</div>
 
       {error && (
         <div className="notice" style={{ color: "var(--red-ink)", borderColor: "#f2c4c4" }}>
@@ -111,10 +127,18 @@ export default function ApprovalsPage() {
         (and produces no outreach) if the company, decision-maker, or a verified email is missing.
       </div>
 
-      {campaigns.length === 0 ? (
+      {campaigns.length === 0 && !run ? (
         <div className="empty">No campaigns yet. Run the pipeline above to generate your first lead.</div>
       ) : (
-        campaigns.map((c) => <CampaignCard key={c.id} campaign={c} threshold={threshold} onChange={refresh} />)
+        campaigns.map((c) => (
+          <CampaignCard
+            key={c.id}
+            campaign={c}
+            threshold={threshold}
+            isNew={newIds.includes(c.id)}
+            onChange={refresh}
+          />
+        ))
       )}
     </AppShell>
   );
@@ -123,10 +147,12 @@ export default function ApprovalsPage() {
 function CampaignCard({
   campaign,
   threshold,
+  isNew,
   onChange,
 }: {
   campaign: Campaign;
   threshold: number;
+  isNew?: boolean;
   onChange: () => void;
 }) {
   const current = campaign.editedEmail ?? campaign.email;
@@ -235,10 +261,13 @@ function CampaignCard({
   const sources = [company?.source, dm?.source].filter(Boolean);
 
   return (
-    <div className="card" style={{ marginBottom: 16 }}>
+    <div className={`card${isNew ? " card-new" : ""}`} style={{ marginBottom: 16 }}>
       <div className="card-head" style={{ alignItems: "flex-start" }}>
         <div>
-          <div className="card-title" style={{ fontSize: 17 }}>{company?.name ?? "Unknown company"}</div>
+          <div className="card-title" style={{ fontSize: 17 }}>
+            {company?.name ?? "Unknown company"}
+            {isNew && <span className="badge-new">New</span>}
+          </div>
           <div className="sub" style={{ fontSize: 13 }}>
             {company?.industry ?? campaign.icp.industry}
             {company?.location ? ` · ${company.location}` : ""}

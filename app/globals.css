@@ -409,9 +409,11 @@ a:hover {
 
 /* ---------------- KPI cards (dashboard hero row) ---------------- */
 
+/* The KPI set is adaptive — it only shows metrics the data can support — so
+   the grid flows instead of assuming a fixed count. */
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(198px, 1fr));
   gap: 18px;
   margin-bottom: 20px;
 }
@@ -969,6 +971,14 @@ a:hover {
 
 .agent-name { font-weight: 600; font-size: 13.5px; }
 .agent-sub { color: var(--muted); font-size: 12.5px; }
+.agent-note {
+  margin-top: 12px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: var(--amber-soft);
+  color: var(--amber-ink);
+  font-size: 12.5px;
+}
 
 .agent-status {
   margin-left: auto;
@@ -1015,6 +1025,234 @@ a:hover {
   border-radius: 12px;
   padding: 12px 15px;
   margin-bottom: 16px;
+}
+
+/* ---------------- Live pipeline run ---------------- */
+
+@keyframes ark-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes ark-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+@keyframes ark-sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(365%); }
+}
+@keyframes ark-pop {
+  from { opacity: 0; transform: translateY(-8px) scale(0.995); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes ark-ring {
+  0% { box-shadow: 0 0 0 0 var(--brand-soft-2), var(--shadow); }
+  70% { box-shadow: 0 0 0 9px transparent, var(--shadow); }
+  100% { box-shadow: 0 0 0 0 transparent, var(--shadow); }
+}
+@keyframes ark-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+.runpanel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px 18px 14px;
+  margin-bottom: 18px;
+  animation: ark-pop 0.24s ease both;
+}
+.runpanel.is-active {
+  border-color: var(--brand-soft-2);
+}
+
+.runpanel-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.runpanel-ic {
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+.runpanel-ic.spin svg {
+  animation: ark-spin 1.5s linear infinite;
+}
+
+.runpanel-title {
+  font-weight: 650;
+  font-size: 14.5px;
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+.runpanel-sub {
+  color: var(--muted);
+  font-size: 12.5px;
+  font-family: var(--font-mono);
+  margin-top: 2px;
+}
+
+.runbar-track {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.runbar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--brand) 0%, oklch(0.66 0.19 290) 100%);
+  transition: width 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+/* Discovery has no measurable progress — sweep instead of faking a percentage. */
+.runbar-fill.indeterminate {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 28%;
+  animation: ark-sweep 1.25s ease-in-out infinite;
+  will-change: transform;
+}
+
+.run-skeletons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 2px 4px;
+}
+.skel-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.skel {
+  border-radius: 8px;
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 0%,
+    oklch(0.945 0.008 275) 40%,
+    var(--surface-2) 80%
+  );
+  background-size: 220% 100%;
+  animation: ark-shimmer 1.25s linear infinite;
+}
+.skel-dot { width: 24px; height: 24px; border-radius: 8px; flex: none; }
+.skel-line { height: 11px; }
+
+.run-leads {
+  display: flex;
+  flex-direction: column;
+  margin-top: 6px;
+}
+
+.run-lead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 2px;
+  border-bottom: 1px solid var(--border);
+  animation: ark-pop 0.22s ease both;
+}
+.run-lead:last-child { border-bottom: none; }
+
+.run-lead-ic {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  background: var(--surface-2);
+  color: var(--muted);
+}
+.run-lead-ic.spin svg { animation: ark-spin 1.5s linear infinite; }
+.run-lead.done .run-lead-ic { background: var(--green-soft); color: var(--green-ink); }
+.run-lead.blocked .run-lead-ic { background: var(--red-soft); color: var(--red-ink); }
+.run-lead.failed .run-lead-ic { background: var(--amber-soft); color: var(--amber-ink); }
+.run-lead.running .run-lead-ic { background: var(--brand-soft); color: var(--brand); }
+
+.run-lead-body { min-width: 0; flex: 1; }
+.run-lead-name {
+  font-weight: 600;
+  font-size: 13.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.run-lead-stage {
+  color: var(--muted);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  margin-top: 2px;
+}
+.run-lead.queued .run-lead-name { color: var(--muted); }
+
+.run-steps { display: flex; gap: 4px; flex: none; }
+.run-step {
+  width: 16px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--border-strong);
+  transition: background 0.3s ease;
+}
+.run-step.on { background: var(--brand); }
+.run-step.now { background: var(--brand-soft-2); animation: ark-breathe 1s ease-in-out infinite; }
+.run-lead.done .run-step.on { background: var(--green); }
+.run-lead.blocked .run-step.on { background: var(--red); }
+
+/* A lead that just landed from a live run. */
+.card-new {
+  animation: ark-pop 0.3s ease both, ark-ring 1.4s ease-out 0.3s 2;
+  border-color: var(--brand-soft-2);
+}
+.badge-new {
+  display: inline-block;
+  vertical-align: middle;
+  margin-left: 9px;
+  font-family: var(--font-sans);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--brand-ink);
+  background: var(--brand-soft);
+  border-radius: 999px;
+  padding: 2px 9px;
+}
+
+.btn-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  opacity: 0.9;
+  animation: ark-spin 0.7s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .runpanel,
+  .run-lead,
+  .card-new,
+  .skel,
+  .runbar-fill.indeterminate,
+  .run-step.now,
+  .btn-spinner,
+  .runpanel-ic.spin svg,
+  .run-lead-ic.spin svg {
+    animation: none;
+  }
 }
 
 .blocked-banner {

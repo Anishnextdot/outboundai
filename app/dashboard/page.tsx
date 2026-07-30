@@ -54,15 +54,17 @@ interface Analytics {
 }
 
 const RANGES = [
+  { days: 0, label: "All time" },
   { days: 7, label: "Last 7 days" },
   { days: 30, label: "Last 30 days" },
   { days: 90, label: "Last 90 days" },
-  { days: 0, label: "All time" },
 ];
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [days, setDays] = useState(7);
+  // All time by default — a windowed default shows a wall of zeroes to anyone
+  // whose leads are older than the window, which reads as "nothing works".
+  const [days, setDays] = useState(0);
   const [a, setA] = useState<Analytics | null>(null);
   const [campaigns, setCampaigns] = useState<Campaign[] | null>(null);
   const [integrations, setIntegrations] = useState<{ supabase: boolean; apollo: boolean; anthropic: boolean } | null>(null);
@@ -113,13 +115,25 @@ export default function DashboardPage() {
   // Nothing has ever run — don't render a wall of zeroes.
   const isEmpty = !loading && list.length === 0;
 
-  const kpis = a
+  // Only metrics that mean something right now. Reply rate and meetings are
+  // undefined concepts until something has actually been sent, so they appear
+  // once — and only once — there is outreach to measure.
+  const hasSent = (a?.counts.sent ?? 0) > 0;
+  const total = a?.counts.total ?? 0;
+  const kpis: Kpi[] = a
     ? [
-        { label: "Prospects Contacted", value: a.counts.total, icon: "plane" as IconName, tint: "t-purple", trend: a.trend.prospects, href: "/leads" },
-        { label: "Messages Sent", value: a.counts.sent, icon: "mail" as IconName, tint: "t-blue", trend: a.trend.sent, href: "/sent" },
-        { label: "Replies", value: a.counts.replied, icon: "reply" as IconName, tint: "t-green", trend: a.trend.replied, href: "/replies" },
-        { label: "Meetings Booked", value: a.counts.meetings, icon: "users" as IconName, tint: "t-amber", trend: a.trend.meetings, href: "/replies" },
-        { label: "Reply Rate", value: a.rates.replyRate, suffix: "%", icon: "target" as IconName, tint: "t-pink", trend: a.trend.replyRate, href: "/analytics" },
+        { label: "Leads Found", value: total, icon: "leads", tint: "t-purple", href: "/leads", trend: a.trend.prospects },
+        { label: "Awaiting Review", value: a.counts.pending_review, icon: "clock", tint: "t-amber", href: "/approvals", share: total },
+        { label: "Approved", value: a.counts.approved, icon: "check", tint: "t-green", href: "/approvals", share: total },
+        { label: "Blocked", value: a.counts.blocked, icon: "shield", tint: "t-red", href: "/approvals", share: total },
+        ...(hasSent
+          ? ([
+              { label: "Messages Sent", value: a.counts.sent, icon: "mail", tint: "t-blue", href: "/sent", trend: a.trend.sent },
+              { label: "Replies", value: a.counts.replied, icon: "reply", tint: "t-green", href: "/replies", trend: a.trend.replied },
+              { label: "Reply Rate", value: a.rates.replyRate, suffix: "%", icon: "target", tint: "t-pink", href: "/analytics", trend: a.trend.replyRate },
+              { label: "Meetings Booked", value: a.counts.meetings, icon: "calendar", tint: "t-amber", href: "/replies", trend: a.trend.meetings },
+            ] as Kpi[])
+          : []),
       ]
     : [];
 
@@ -135,14 +149,19 @@ export default function DashboardPage() {
 
   const approvals = list.filter((c) => c.status === "pending_review" || c.status === "blocked").slice(0, 5);
 
-  const agents = [
-    { name: "Lead Discovery Agent", sub: "Finding high-quality leads", ok: integrations?.apollo ?? true },
-    { name: "Decision Maker Finder", sub: "Identifying key people", ok: integrations?.apollo ?? true },
-    { name: "Research Agent", sub: "Gathering insights", ok: integrations?.anthropic ?? true },
-    { name: "Personalization Agent", sub: "Creating angles", ok: integrations?.anthropic ?? true },
-    { name: "Content Agent", sub: "Generating content", ok: integrations?.anthropic ?? true },
+  // Real integration state. Unknown stays unknown — never claim "Active" for a
+  // key we haven't checked yet, and say plainly when a stage is on mock data.
+  const apollo = integrations?.apollo ?? null;
+  const claude = integrations?.anthropic ?? null;
+  const agents: AgentRow[] = [
+    { name: "Lead Discovery Agent", live: apollo, on: "Apollo company search", off: "No Apollo key — mock companies" },
+    { name: "Decision Maker Finder", live: apollo, on: "Apollo people + email verification", off: "No Apollo key — mock contacts" },
+    { name: "Research Agent", live: claude, on: "Claude research dossiers", off: "No Anthropic key — mock research" },
+    { name: "Personalization Agent", live: claude, on: "Claude outreach angles", off: "No Anthropic key — mock angles" },
+    { name: "Content Agent", live: claude, on: "Claude email + LinkedIn drafts", off: "No Anthropic key — mock drafts" },
   ];
-  const allAgentsOk = agents.every((x) => x.ok);
+  const missing = agents.filter((x) => x.live === false).length;
+  const cfgKnown = integrations !== null;
 
   const header = (
     <div className="topbar">
@@ -208,10 +227,22 @@ export default function DashboardPage() {
                 </div>
               </div>
             </div>
-            <Delta point={k.trend} span={a!.trend.spanDays} unit={k.suffix ?? ""} />
+            <Foot kpi={k} days={days} span={a!.trend.spanDays} />
           </div>
         ))}
       </div>
+
+      {!hasSent && (
+        <div className="notice" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <Icon name="info" size={16} />
+          <span>
+            Nothing has been sent yet, so there are no reply, meeting or rate metrics to show.{" "}
+            <span className="link" onClick={() => router.push("/approvals")}>
+              Approve a lead and send it →
+            </span>
+          </span>
+        </div>
+      )}
 
       {/* Campaigns + activity */}
       <div className="row-main">
@@ -311,6 +342,8 @@ export default function DashboardPage() {
             <span className="card-title">
               Pending Approvals
               {approvals.length > 0 && <span className="nav-badge" style={{ marginLeft: 8 }}>{approvals.length}</span>}
+              {/* A review queue is never windowed — hiding older work would lose it. */}
+              {days !== 0 && <span className="pill-tag">all time</span>}
             </span>
             <span className="link" onClick={() => router.push("/approvals")}>Open Approvals</span>
           </div>
@@ -378,10 +411,20 @@ export default function DashboardPage() {
             <div className="card-head">
               <span className="card-title">AI Agents</span>
               <span
-                className={`badge ${allAgentsOk ? "green" : ""}`}
-                style={allAgentsOk ? {} : { background: "var(--amber-soft)", color: "var(--amber-ink)" }}
+                className={`badge ${cfgKnown && missing === 0 ? "green" : ""}`}
+                style={
+                  !cfgKnown
+                    ? { background: "var(--surface-2)", color: "var(--muted)" }
+                    : missing === 0
+                    ? {}
+                    : { background: "var(--amber-soft)", color: "var(--amber-ink)" }
+                }
               >
-                {allAgentsOk ? "All systems operational" : "Configuration needed"}
+                {!cfgKnown
+                  ? "Checking integrations…"
+                  : missing === 0
+                  ? "All integrations live"
+                  : `${missing} agent${missing === 1 ? "" : "s"} on mock data`}
               </span>
             </div>
             {agents.map((x) => (
@@ -389,46 +432,66 @@ export default function DashboardPage() {
                 <span className="agent-ic"><Icon name="bot" /></span>
                 <div>
                   <div className="agent-name">{x.name}</div>
-                  <div className="agent-sub">{x.sub}</div>
+                  <div className="agent-sub">{x.live === false ? x.off : x.live ? x.on : "Checking…"}</div>
                 </div>
-                {x.ok ? (
-                  <span className="agent-status"><span className="live" /> Active</span>
+                {x.live === null ? (
+                  <span className="agent-status" style={{ color: "var(--muted)" }}>
+                    <span className="live" style={{ background: "var(--muted-2)", boxShadow: "none" }} /> Unknown
+                  </span>
+                ) : x.live ? (
+                  <span className="agent-status"><span className="live" /> Live</span>
                 ) : (
                   <span className="agent-status" style={{ color: "var(--amber-ink)" }}>
-                    <span className="live" style={{ background: "var(--amber)", boxShadow: "0 0 0 3px var(--amber-soft)" }} /> Needs key
+                    <span className="live" style={{ background: "var(--amber)", boxShadow: "0 0 0 3px var(--amber-soft)" }} /> Mock
                   </span>
                 )}
               </div>
             ))}
+            {cfgKnown && integrations && !integrations.supabase && (
+              <div className="agent-note">
+                Storage: in-memory — leads reset when the server restarts. Add Supabase keys to persist them.
+              </div>
+            )}
           </div>
         </div>
 
         <div className="card">
           <div className="card-head">
             <span className="card-title">Trust Score Distribution</span>
-            <span className="pill-tag">live</span>
+            <span className="pill-tag">{days === 0 ? "all time" : `last ${days} days`}</span>
           </div>
-          <div className="donut-wrap">
-            <div className="donut">
-              <Donut segments={trust} />
-              <div className="donut-center">
-                <div>
-                  <div className="dc-num">{trustTotal}</div>
-                  <div className="dc-lbl">Leads</div>
+          {trustTotal === 0 ? (
+            <div className="empty" style={{ padding: 28 }}>
+              No leads in this period to score.
+              {days !== 0 && (
+                <div style={{ marginTop: 8 }}>
+                  <span className="link" onClick={() => setDays(0)}>Show all time →</span>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="donut-wrap">
+              <div className="donut">
+                <Donut segments={trust} />
+                <div className="donut-center">
+                  <div>
+                    <div className="dc-num">{trustTotal}</div>
+                    <div className="dc-lbl">{trustTotal === 1 ? "Lead" : "Leads"}</div>
+                  </div>
                 </div>
               </div>
+              <div className="donut-legend">
+                {trust.map((s) => (
+                  <div className="dl" key={s.label}>
+                    <span className="dot" style={{ background: s.color }} />
+                    <span>{s.label}</span>
+                    <span className="dl-pct">{Math.round((s.value / trustTotal) * 100)}%</span>
+                    <span className="dl-n">({s.value})</span>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="donut-legend">
-              {trust.map((s) => (
-                <div className="dl" key={s.label}>
-                  <span className="dot" style={{ background: s.color }} />
-                  <span>{s.label}</span>
-                  <span className="dl-pct">{trustTotal ? Math.round((s.value / trustTotal) * 100) : 0}%</span>
-                  <span className="dl-n">({s.value})</span>
-                </div>
-              ))}
-            </div>
-          </div>
+          )}
         </div>
       </div>
     </AppShell>
@@ -437,14 +500,72 @@ export default function DashboardPage() {
 
 // ------------------------------------------------------------------ pieces
 
+interface Kpi {
+  label: string;
+  value: number;
+  suffix?: string;
+  icon: IconName;
+  tint: string;
+  href: string;
+  /** Period-over-period movement, where the metric has one. */
+  trend?: TrendPoint;
+  /** Denominator for share-of-leads metrics (review / approved / blocked). */
+  share?: number;
+}
+
+interface AgentRow {
+  name: string;
+  /** null = config not loaded yet. Never render an unknown as healthy. */
+  live: boolean | null;
+  on: string;
+  off: string;
+}
+
+/**
+ * The line under a KPI. Every variant states something the data actually
+ * supports: a like-for-like delta, a real share, or the plain absence of
+ * activity — never a percentage invented from a zero baseline.
+ */
+function Foot({ kpi, days, span }: { kpi: Kpi; days: number; span: number }) {
+  if (kpi.share !== undefined) {
+    if (kpi.share === 0) return <div className="kpi-foot"><span className="lbl">no leads yet</span></div>;
+    return (
+      <div className="kpi-foot">
+        <span className="delta flat">{Math.round((kpi.value / kpi.share) * 100)}%</span>
+        <span className="lbl">of {kpi.share.toLocaleString()} leads</span>
+      </div>
+    );
+  }
+
+  if (!kpi.trend) return <div className="kpi-foot" />;
+
+  // All time: the headline number spans everything, so a 7-day delta would be
+  // comparing two different things. Show recent volume instead.
+  if (days === 0) {
+    const recent = kpi.trend.current;
+    return (
+      <div className="kpi-foot">
+        <span className={`delta ${recent > 0 ? "up" : "flat"}`}>
+          {recent > 0 ? `+${recent.toLocaleString()}${kpi.suffix ?? ""}` : "—"}
+        </span>
+        <span className="lbl">{recent > 0 ? `in the last ${span} days` : `nothing in the last ${span} days`}</span>
+      </div>
+    );
+  }
+
+  return <Delta point={kpi.trend} span={span} unit={kpi.suffix ?? ""} />;
+}
+
 /** Period-over-period chip. Says "no prior data" instead of faking a delta. */
 function Delta({ point, span, unit = "" }: { point: TrendPoint; span: number; unit?: string }) {
   if (point.changePct === null) {
     // No baseline. Report the raw movement rather than an invented percentage.
     return (
       <div className="kpi-foot">
-        <span className="delta flat">{point.current > 0 ? `+${point.current.toLocaleString()}${unit}` : "—"}</span>
-        <span className="lbl">{point.current > 0 ? "first period on record" : "no activity yet"}</span>
+        <span className={`delta ${point.current > 0 ? "up" : "flat"}`}>
+          {point.current > 0 ? `+${point.current.toLocaleString()}${unit}` : "—"}
+        </span>
+        <span className="lbl">{point.current > 0 ? "first period on record" : "no activity in this period"}</span>
       </div>
     );
   }
